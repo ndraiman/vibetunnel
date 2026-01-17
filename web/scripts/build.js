@@ -5,6 +5,21 @@ const esbuild = require('esbuild');
 const { prodOptions } = require('./esbuild-config.js');
 const { nodePtyPlugin } = require('./node-pty-plugin.js');
 
+function canLoadNativeModule(modulePath) {
+  if (!fs.existsSync(modulePath)) {
+    return false;
+  }
+  try {
+    const nativeModule = { exports: {} };
+    process.dlopen(nativeModule, modulePath);
+    return true;
+  } catch (error) {
+    const message = String(error?.message || '').split('\n')[0];
+    console.warn(`Native module incompatible: ${path.basename(modulePath)}${message ? ` (${message})` : ''}`);
+    return false;
+  }
+}
+
 async function build() {
   console.log('Starting build process...');
   
@@ -142,13 +157,27 @@ async function build() {
   const vibetunnelPath = path.join(nativeDir, 'vibetunnel');
   const ptyNodePath = path.join(nativeDir, 'pty.node');
   const spawnHelperPath = path.join(nativeDir, 'spawn-helper');
+  const authPamPath = path.join(nativeDir, 'authenticate_pam.node');
 
-  if (fs.existsSync(vibetunnelPath) && fs.existsSync(ptyNodePath) && fs.existsSync(spawnHelperPath)) {
+  const nativeModulesCompatible =
+    canLoadNativeModule(ptyNodePath) && canLoadNativeModule(authPamPath);
+
+  if (
+    fs.existsSync(vibetunnelPath) &&
+    fs.existsSync(ptyNodePath) &&
+    fs.existsSync(spawnHelperPath) &&
+    fs.existsSync(authPamPath) &&
+    nativeModulesCompatible
+  ) {
     console.log('✅ Native binaries already exist, skipping build...');
     console.log('  - vibetunnel executable: ✓');
     console.log('  - pty.node: ✓');
     console.log('  - spawn-helper: ✓');
+    console.log('  - authenticate_pam.node: ✓');
   } else {
+    if (!nativeModulesCompatible) {
+      console.log('Native modules are incompatible with the current Node.js, rebuilding...');
+    }
     // Check for --custom-node flag
     const useCustomNode = process.argv.includes('--custom-node');
 

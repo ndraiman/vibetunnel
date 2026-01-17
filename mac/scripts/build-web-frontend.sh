@@ -72,6 +72,9 @@ if [ "${CI}" = "true" ] && [ -f "${WEB_DIR}/dist/server/server.js" ]; then
     
     if [ -f "${NATIVE_DIR}/authenticate_pam.node" ]; then
         cp "${NATIVE_DIR}/authenticate_pam.node" "${APP_RESOURCES}/"
+    else
+        echo "error: authenticate_pam.node not found. PAM authentication is required."
+        exit 1
     fi
     
     if [ -f "${WEB_DIR}/bin/vt" ]; then
@@ -101,7 +104,7 @@ if [ -f "${PREVIOUS_HASH_FILE}" ]; then
     PREVIOUS_HASH=$(cat "${PREVIOUS_HASH_FILE}")
     if [ "${CURRENT_HASH}" = "${PREVIOUS_HASH}" ]; then
         # Also check if the built files actually exist
-        if [ -d "${DEST_DIR}" ] && [ -f "${APP_RESOURCES}/vibetunnel" ] && [ -f "${APP_RESOURCES}/pty.node" ] && [ -f "${APP_RESOURCES}/spawn-helper" ] && [ -f "${APP_RESOURCES}/vibetunnel-fwd" ]; then
+        if [ -d "${DEST_DIR}" ] && [ -f "${APP_RESOURCES}/vibetunnel" ] && [ -f "${APP_RESOURCES}/pty.node" ] && [ -f "${APP_RESOURCES}/spawn-helper" ] && [ -f "${APP_RESOURCES}/vibetunnel-fwd" ] && [ -f "${APP_RESOURCES}/authenticate_pam.node" ]; then
             echo "Web content unchanged and build outputs exist. Skipping rebuild."
             NEED_REBUILD=0
         else
@@ -355,12 +358,13 @@ else
     exit 1
 fi
 
-# Copy authenticate_pam.node if it exists
+# Copy authenticate_pam.node (required for macOS auth)
 if [ -f "${NATIVE_DIR}/authenticate_pam.node" ]; then
     echo "Copying authenticate_pam.node..."
     cp "${NATIVE_DIR}/authenticate_pam.node" "${APP_RESOURCES}/"
 else
-    echo "Warning: authenticate_pam.node not found. PAM authentication may not work."
+    echo "error: authenticate_pam.node not found. PAM authentication is required."
+    exit 1
 fi
 
 # Copy unified vt script
@@ -413,6 +417,11 @@ fi
 # Check if vibetunnel-fwd is executable
 if [ -f "${APP_RESOURCES}/vibetunnel-fwd" ] && [ ! -x "${APP_RESOURCES}/vibetunnel-fwd" ]; then
     MISSING_FILES+=("vibetunnel-fwd is not executable")
+fi
+
+# Check for authenticate_pam.node
+if [ ! -f "${APP_RESOURCES}/authenticate_pam.node" ]; then
+    MISSING_FILES+=("authenticate_pam.node")
 fi
 
 # Check for vt script

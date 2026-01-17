@@ -23,7 +23,7 @@
  * ```
  */
 
-const { execSync } = require('child_process');
+const { execSync, execFileSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
@@ -79,40 +79,58 @@ process.on('SIGTERM', () => {
   process.exit(1);
 });
 
+function resolveModuleDir(moduleName) {
+  try {
+    return path.dirname(require.resolve(`${moduleName}/package.json`));
+  } catch {
+    return path.join(__dirname, 'node_modules', moduleName);
+  }
+}
+
+function canLoadNativeModule(nodePath, modulePath) {
+  try {
+    execFileSync(
+      nodePath,
+      [
+        '-e',
+        `const m={exports:{}};try{process.dlopen(m,${JSON.stringify(
+          modulePath
+        )});process.exit(0);}catch(err){console.error(err.message);process.exit(1);}`,
+      ],
+      { stdio: ['ignore', 'pipe', 'pipe'] }
+    );
+    return true;
+  } catch (error) {
+    const stderr = (error.stderr || error.stdout || '').toString().trim();
+    if (stderr) {
+      console.warn(`  - ${path.basename(modulePath)} failed to load: ${stderr.split('\n')[0]}`);
+    }
+    return false;
+  }
+}
+
+function ensureNativeModuleCompatible(nodePath, name, modulePath, rebuildFn) {
+  if (!fs.existsSync(modulePath)) {
+    console.log(`Building ${name} native module...`);
+    rebuildFn();
+  }
+
+  if (!canLoadNativeModule(nodePath, modulePath)) {
+    console.log(`Rebuilding ${name} native module to match ${path.basename(nodePath)}...`);
+    rebuildFn();
+    if (!canLoadNativeModule(nodePath, modulePath)) {
+      console.error(`Error: ${name} native module is not compatible with ${nodePath}`);
+      process.exit(1);
+    }
+  }
+}
+
 // No patching needed - SEA support is built into our vendored node-pty
 
 async function main() {
   try {
     // No patching needed - SEA support is built into our vendored node-pty
     console.log('Using vendored node-pty with built-in SEA support...');
-    
-    // Ensure native modules are built (in case postinstall didn't run)
-    const nativePtyDir = 'node_modules/node-pty/build/Release';
-    const nativeAuthDir = 'node_modules/authenticate-pam/build/Release';
-    const nativeAuthFile = path.join(nativeAuthDir, 'authenticate_pam.node');
-    
-    if (!fs.existsSync(nativePtyDir)) {
-      console.log('Building node-pty native module...');
-      // Find the actual node-pty path (could be in .pnpm directory)
-      const nodePtyPath = require.resolve('node-pty/package.json');
-      const nodePtyDir = path.dirname(nodePtyPath);
-      console.log(`Found node-pty at: ${nodePtyDir}`);
-      
-      // Build node-pty using node-gyp directly to avoid TypeScript compilation
-      execSync(`cd "${nodePtyDir}" && npx node-gyp rebuild`, { 
-        stdio: 'inherit',
-        shell: true
-      });
-    }
-    
-    if (!fs.existsSync(nativeAuthFile)) {
-      console.log('Building authenticate-pam native module...');
-      execSync('npm rebuild authenticate-pam', { 
-        stdio: 'inherit',
-        cwd: __dirname
-      });
-    }
-    
     // Create build directory
     if (!fs.existsSync('build')) {
       fs.mkdirSync('build');
@@ -180,6 +198,20 @@ async function main() {
     const nodeStats = fs.statSync(nodeExe);
     console.log(`Node.js binary size: ${(nodeStats.size / 1024 / 1024).toFixed(2)} MB`);
 
+    const nodePtyDir = resolveModuleDir('node-pty');
+    const authPamDir = resolveModuleDir('authenticate-pam');
+    if (!fs.existsSync(nodePtyDir)) {
+      console.error(`Error: node-pty module not found at ${nodePtyDir}`);
+      process.exit(1);
+    }
+    if (!fs.existsSync(authPamDir)) {
+      console.error(`Error: authenticate-pam module not found at ${authPamDir}`);
+      process.exit(1);
+    }
+
+    const ptyNodePath = path.join(nodePtyDir, 'build', 'Release', 'pty.node');
+    const authPamPath = path.join(authPamDir, 'build', 'Release', 'authenticate_pam.node');
+
     // 1. Rebuild native modules if using custom Node.js
     if (customNodePath) {
       console.log('\nCustom Node.js detected - rebuilding native modules...');
@@ -217,9 +249,35 @@ async function main() {
         stdio: 'inherit',
         env: cleanEnv
       });
-      
+
+      const ptyOk = canLoadNativeModule(nodeExe, ptyNodePath);
+      const pamOk = canLoadNativeModule(nodeExe, authPamPath);
+      if (!ptyOk || !pamOk) {
+        console.error('Error: Native modules are not compatible with the selected Node.js build');
+        process.exit(1);
+      }
+
       // Restore original PATH
       process.env.PATH = originalPath;
+    }
+
+    if (!customNodePath) {
+      const rebuildNodePty = () => {
+        execSync(`cd "${nodePtyDir}" && npx node-gyp rebuild`, {
+          stdio: 'inherit',
+          shell: true
+        });
+      };
+
+      const rebuildAuthPam = () => {
+        execSync('npm rebuild authenticate-pam', {
+          stdio: 'inherit',
+          cwd: __dirname
+        });
+      };
+
+      ensureNativeModuleCompatible(nodeExe, 'node-pty', ptyNodePath, rebuildNodePty);
+      ensureNativeModuleCompatible(nodeExe, 'authenticate-pam', authPamPath, rebuildAuthPam);
     }
 
     // 2. Bundle TypeScript with esbuild
@@ -366,9 +424,7 @@ if (typeof process !== 'undefined' && process.versions && process.versions.node)
     console.log('\nCopying native modules...');
     
     // Find the actual node-pty build directory (could be in .pnpm directory)
-    const nodePtyPath = require.resolve('node-pty/package.json');
-    const nodePtyBaseDir = path.dirname(nodePtyPath);
-    const nativeModulesDir = path.join(nodePtyBaseDir, 'build/Release');
+    const nativeModulesDir = path.join(nodePtyDir, 'build/Release');
 
     // Check if native modules exist
     if (!fs.existsSync(nativeModulesDir)) {
@@ -378,12 +434,12 @@ if (typeof process !== 'undefined' && process.versions && process.versions.node)
     }
 
     // Copy pty.node
-    const ptyNodePath = path.join(nativeModulesDir, 'pty.node');
-    if (!fs.existsSync(ptyNodePath)) {
+    const ptyNodeBuildPath = path.join(nativeModulesDir, 'pty.node');
+    if (!fs.existsSync(ptyNodeBuildPath)) {
       console.error('Error: pty.node not found. Native module build may have failed.');
       process.exit(1);
     }
-    fs.copyFileSync(ptyNodePath, 'native/pty.node');
+    fs.copyFileSync(ptyNodeBuildPath, 'native/pty.node');
     console.log('  - Copied pty.node');
 
     // Copy spawn-helper (macOS only)
@@ -401,7 +457,6 @@ if (typeof process !== 'undefined' && process.versions && process.versions.node)
     }
 
     // Copy authenticate_pam.node
-    const authPamPath = 'node_modules/authenticate-pam/build/Release/authenticate_pam.node';
     if (fs.existsSync(authPamPath)) {
       fs.copyFileSync(authPamPath, 'native/authenticate_pam.node');
       console.log('  - Copied authenticate_pam.node');
