@@ -194,6 +194,11 @@ export function createFileRoutes(): Router {
     try {
       const filename = req.params.filename;
 
+      // Ensure filename is a string (not an array)
+      if (typeof filename !== 'string') {
+        return res.status(400).json({ error: 'Invalid filename' });
+      }
+
       // Security check: ensure filename doesn't contain path traversal
       if (
         filename.includes('..') ||

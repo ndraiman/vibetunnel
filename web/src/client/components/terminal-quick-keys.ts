@@ -55,6 +55,8 @@ export class TerminalQuickKeys extends LitElement {
     pasteText?: string
   ) => void;
   @property({ type: Boolean }) visible = false;
+  @property({ type: Boolean }) minimized = false;
+  @property({ type: Function }) onMinimizeToggle?: () => void;
   @property({ type: Array }) rows?: QuickKeyDefinition[][];
 
   @state() private showFunctionKeys = false;
@@ -401,9 +403,39 @@ export class TerminalQuickKeys extends LitElement {
     );
   }
 
+  /** Render the minimize button */
+  private renderMinimizeButton() {
+    return html`
+      <button
+        type="button"
+        tabindex="-1"
+        class="quick-key-btn min-w-0 bg-bg-tertiary text-primary font-mono rounded border border-border hover:bg-surface hover:border-primary transition-all whitespace-nowrap"
+        style="padding: 4px 8px; font-size: 14px;"
+        title="Minimize quick keys"
+        @mousedown=${(e: Event) => {
+          e.preventDefault();
+          e.stopPropagation();
+        }}
+        @touchend=${(e: TouchEvent) => {
+          e.preventDefault();
+          e.stopPropagation();
+          this.onMinimizeToggle?.();
+        }}
+        @click=${(e: MouseEvent) => {
+          e.preventDefault();
+          e.stopPropagation();
+          this.onMinimizeToggle?.();
+        }}
+      >
+        ▼
+      </button>
+    `;
+  }
+
   /** Render the Done button */
   private renderDoneButton() {
     return html`
+      ${this.renderMinimizeButton()}
       <button
         type="button"
         tabindex="-1"
@@ -629,6 +661,40 @@ export class TerminalQuickKeys extends LitElement {
 
   render() {
     if (!this.visible) return '';
+
+    // When minimized, show just a small floating button to expand
+    if (this.minimized) {
+      return html`
+        <div
+          class="terminal-quick-keys-minimized"
+          style="position: fixed !important; bottom: var(--keyboard-offset, 10px) !important; right: 10px !important; z-index: 9999;"
+        >
+          <button
+            type="button"
+            tabindex="-1"
+            class="quick-key-btn bg-bg-tertiary text-primary font-mono rounded-full border border-border hover:bg-surface hover:border-primary transition-all shadow-lg"
+            style="width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; font-size: 18px;"
+            @mousedown=${(e: Event) => {
+              e.preventDefault();
+              e.stopPropagation();
+            }}
+            @touchend=${(e: TouchEvent) => {
+              e.preventDefault();
+              e.stopPropagation();
+              this.onMinimizeToggle?.();
+            }}
+            @click=${(e: MouseEvent) => {
+              e.preventDefault();
+              e.stopPropagation();
+              this.onMinimizeToggle?.();
+            }}
+            title="Expand quick keys"
+          >
+            ⌨️
+          </button>
+        </div>
+      `;
+    }
 
     // Use the same layout for all mobile devices (phones and tablets)
     return html`

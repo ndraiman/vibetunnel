@@ -10,6 +10,9 @@
  */
 
 import type { TerminalThemeId } from '../../utils/terminal-themes.js';
+import { createLogger } from '../../utils/logger.js';
+
+const logger = createLogger('ui-state-manager');
 
 export interface UIState {
   // Connection state
@@ -55,6 +58,15 @@ export interface UIState {
 
   // Keyboard capture
   keyboardCaptureActive: boolean;
+
+  // Direct keyboard mode
+  useDirectKeyboard: boolean;
+
+  // Mobile input overlay
+  showMobileInput: boolean;
+
+  // Quick keys minimized (collapsed to small button)
+  quickKeysMinimized: boolean;
 }
 
 export interface UIStateCallbacks {
@@ -106,6 +118,15 @@ export class UIStateManager {
 
     // Keyboard capture
     keyboardCaptureActive: true,
+
+    // Direct keyboard mode
+    useDirectKeyboard: true,
+
+    // Mobile input overlay
+    showMobileInput: false,
+
+    // Quick keys minimized
+    quickKeysMinimized: false,
   };
 
   private callbacks: UIStateCallbacks | null = null;
@@ -270,6 +291,39 @@ export class UIStateManager {
       logger.error('Failed to load app preferences', error);
       this.state.useDirectKeyboard = true; // Default to true on error
     }
+  }
+
+  // Direct keyboard mode
+  setUseDirectKeyboard(enabled: boolean): void {
+    this.state.useDirectKeyboard = enabled;
+    this.callbacks?.requestUpdate();
+  }
+
+  toggleDirectKeyboard(): void {
+    this.state.useDirectKeyboard = !this.state.useDirectKeyboard;
+    this.callbacks?.requestUpdate();
+  }
+
+  // Mobile input overlay
+  setShowMobileInput(show: boolean): void {
+    this.state.showMobileInput = show;
+    this.callbacks?.requestUpdate();
+  }
+
+  toggleMobileInput(): void {
+    this.state.showMobileInput = !this.state.showMobileInput;
+    this.callbacks?.requestUpdate();
+  }
+
+  // Quick keys minimized state
+  setQuickKeysMinimized(minimized: boolean): void {
+    this.state.quickKeysMinimized = minimized;
+    this.callbacks?.requestUpdate();
+  }
+
+  toggleQuickKeysMinimized(): void {
+    this.state.quickKeysMinimized = !this.state.quickKeysMinimized;
+    this.callbacks?.requestUpdate();
   }
 
   // Chat mode
