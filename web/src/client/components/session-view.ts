@@ -305,6 +305,7 @@ export class SessionView extends LitElement {
     // Set up callbacks for direct keyboard manager
     const directKeyboardCallbacks: DirectKeyboardCallbacks = {
       getShowCtrlAlpha: () => this.uiStateManager.getState().showCtrlAlpha,
+      getShowMobileInput: () => this.uiStateManager.getState().showMobileInput,
       getDisableFocusManagement: () => this.disableFocusManagement,
       getVisualViewportHandler: () => {
         // Trigger the visual viewport handler if it exists
@@ -717,6 +718,38 @@ export class SessionView extends LitElement {
     if (state.isMobile && state.useDirectKeyboard) {
       this.directKeyboardManager.ensureHiddenInputVisible();
     }
+  }
+
+  /**
+   * Handle special key presses from the mobile quick keys UI
+   * Maps key names to the appropriate input manager calls
+   */
+  private handleSpecialKey(key: string) {
+    if (!this.inputManager) {
+      logger.warn('Cannot send special key - inputManager not available');
+      return;
+    }
+
+    // Map UI key names to the expected input manager key names
+    const keyMap: Record<string, string> = {
+      arrow_up: 'arrow_up',
+      arrow_down: 'arrow_down',
+      arrow_left: 'arrow_left',
+      arrow_right: 'arrow_right',
+      escape: 'escape',
+      enter: 'enter',
+      '\t': 'tab',
+    };
+
+    const mappedKey = keyMap[key] ?? key;
+    this.inputManager.sendInput(mappedKey);
+  }
+
+  /**
+   * Toggle the mobile input overlay (ABC123 button)
+   */
+  private handleMobileInputToggle() {
+    this.uiStateManager.toggleMobileInput();
   }
 
   private handleToggleChatMode() {
