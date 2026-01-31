@@ -1565,6 +1565,8 @@ export class SessionView extends LitElement {
       <terminal-quick-keys
         style="position: fixed !important; bottom: 0 !important; left: 0 !important; right: 0 !important; z-index: ${Z_INDEX.TERMINAL_QUICK_KEYS} !important;"
         .visible=${uiState.isMobile && uiState.useDirectKeyboard && uiState.showQuickKeys && !uiState.chatMode}
+        .minimized=${uiState.quickKeysMinimized}
+        .onMinimizeToggle=${() => this.uiStateManager.toggleQuickKeysMinimized()}
         .onKeyPress=${(key: string) => this.directKeyboardManager.handleQuickKeyPress(key)}
       ></terminal-quick-keys>
 

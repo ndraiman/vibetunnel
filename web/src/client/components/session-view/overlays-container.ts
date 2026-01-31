@@ -107,8 +107,9 @@ export class OverlaysContainer extends LitElement {
       
       <!-- Floating Keyboard Button (for direct keyboard mode on mobile, hidden in chat mode) -->
       <!-- Always visible when in direct keyboard mode to allow dismissing the keyboard -->
+      <!-- Hidden when quick keys are minimized (user wants a clean view) -->
       ${
-        this.uiState.isMobile && this.uiState.useDirectKeyboard && !this.uiState.chatMode
+        this.uiState.isMobile && this.uiState.useDirectKeyboard && !this.uiState.chatMode && !this.uiState.quickKeysMinimized
           ? html`
             <div
               class="keyboard-button mobile-keyboard-button ${this.uiState.showQuickKeys ? 'quick-keys-visible' : ''}"

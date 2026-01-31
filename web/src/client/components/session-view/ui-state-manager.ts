@@ -64,6 +64,9 @@ export interface UIState {
 
   // Mobile input overlay
   showMobileInput: boolean;
+
+  // Quick keys minimized (collapsed to small button)
+  quickKeysMinimized: boolean;
 }
 
 export interface UIStateCallbacks {
@@ -121,6 +124,9 @@ export class UIStateManager {
 
     // Mobile input overlay
     showMobileInput: false,
+
+    // Quick keys minimized
+    quickKeysMinimized: false,
   };
 
   private callbacks: UIStateCallbacks | null = null;
@@ -306,6 +312,17 @@ export class UIStateManager {
 
   toggleMobileInput(): void {
     this.state.showMobileInput = !this.state.showMobileInput;
+    this.callbacks?.requestUpdate();
+  }
+
+  // Quick keys minimized state
+  setQuickKeysMinimized(minimized: boolean): void {
+    this.state.quickKeysMinimized = minimized;
+    this.callbacks?.requestUpdate();
+  }
+
+  toggleQuickKeysMinimized(): void {
+    this.state.quickKeysMinimized = !this.state.quickKeysMinimized;
     this.callbacks?.requestUpdate();
   }
 
